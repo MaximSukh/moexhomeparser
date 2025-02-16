@@ -364,115 +364,115 @@ class Moex:
         df = url_processed(url, **kwargs)
         return df
     
-#     def get_bond_schedule(self, till_offer: bool = False, last_coupon: bool = False):
-#         '''Returns an unprocessed schedule of payments for a bond:
-#         - coupons
-#         - amortization payments
-#         - offers'''
-#         try:
-#             coupons = self.get_coupons()
-#             try:
-#                 if pd.isnull(coupons.loc[coupons['coupondate'] > dt.datetime.now(), 'valueprc'].iloc[0]) == True:        
-#                     acc_int = self._parse_market_data()['ACCRUEDINT']
-#                     set_date = pd.to_datetime(self._parse_market_data()['SETTLEDATE'])
-#                     c_str = coupons.loc[coupons['coupondate'] > dt.datetime.now()].iloc[0]['startdate'] 
-#                     c_end = coupons.loc[coupons['coupondate'] > dt.datetime.now()].iloc[0]['coupondate'] 
-#                     f_v = coupons.loc[coupons['coupondate'] > dt.datetime.now()].iloc[0]['facevalue'] 
-#                     coup_rate = round(acc_int / f_v * 365 / round(((set_date - c_str).days),0),3)*100
-#                     coup_sum = round((coup_rate / 100 * f_v) *  round((c_end - c_str).days ) / 365,2)
-#                     coupons.loc[coupons.loc[coupons['coupondate'] > dt.datetime.now()].index[0], 'valueprc'] = coup_rate
-#                     coupons.loc[coupons.loc[coupons['coupondate'] > dt.datetime.now()].index[0], 'value'] = coup_sum
-#             except:
-#                 pass
-#             offers = self.get_offers()
-#             amortization = self.get_amortization()
-#             # coupons processing
-#             coupons.drop(columns={'issuevalue', 'primary_boardid',
-#                                   'recorddate', 'startdate', 'value_rub'}, inplace=True, errors='ignore')
-#             coupons.rename(columns={'coupondate': 'date',
-#                                     'valueprc': 'couponprc',
-#                                     'value': 'couponvalue'}, inplace=True)
-#             coupons['operationtype'] = 'coupon'
-#             # offers processing
-#             offers = offers.loc[~offers['offertype'].str.contains('отмен')].reset_index(drop=True)
-#             offers.drop(columns={'issuevalue', 'offerdatestart', 'offerdate', 'primary_boardid',
-#                         'agent', 'offertype', 'value'}, inplace=True, errors='ignore')
-#             offers.rename(columns={'offerdateend': 'date'}, inplace=True)
-#             offers['operationtype'] = 'offer'
-#             # amortization processing
-#             amortization.drop(columns={
-#                 'issuevalue', 'primary_boardid', 'value_rub'}, inplace=True, errors='ignore')
-#             amortization.rename(columns={'amortdate': 'date',
-#                                          'data_source': 'operationtype',
-#                                          'valueprc': 'redemptionprc',
-#                                          'value': 'redemptionvalue'}, inplace=True)
-#             issue_date = {'date': self.get_description(
-#                 param='issuedate'), 'operationtype': 'issue'}
-#             # concatenate issue date / coupons / offers / amortization schedules
-#             df = pd.concat([coupons, offers, amortization], ignore_index=True)
-#             df.loc[len(df)] = issue_date
-#             # sorting by date and operation type (coupon - last) to backfill nan coupon rates
-#             mapping = {'issue': 0,
-#                        'coupon': 4,
-#                        'offer': 1,
-#                        'amortization': 2,
-#                        'maturity': 3}
-#             df['order'] = df['operationtype'].map(mapping)
-#             df = df.sort_values(by=['date', 'order']).reset_index(drop=True)
-#             for column in ['couponprc']:
-#                 df[column] = df[column].bfill()
-#             df['order'] = df['operationtype'].map(mapping)
-#             df = df.sort_values(by=['date', 'order'])
-#             df = df.drop(columns=['order']).reset_index(drop=True)
-#             # final sorting by date and operation type
-#             mapping = {'issue': 0,
-#                        'coupon': 1,
-#                        'offer': 2,
-#                        'amortization': 3,
-#                        'maturity': 4}
-#             df['order'] = df['operationtype'].map(mapping)
-#             df = df.sort_values(by=['date', 'order']).reset_index(drop=True)
-#             df = df.drop(columns=['order'])
-#             for column in ['isin', 'name', 'initialfacevalue', 'faceunit', 'secid']:
-#                 df[column] = df[column].fillna(df[column].mode()[0])
-#             df.loc[0, 'facevalue'] = df.loc[0, 'initialfacevalue']
-#             df.loc[0, 'couponvalue'] = 0
-#             for ix in range(1, len(df)):
-#                 if df.loc[ix-1, 'operationtype'] == 'amortization':
-#                     df.loc[ix, 'facevalue'] = df.loc[ix-1, 'facevalue'] - \
-#                         df.loc[ix-1, 'redemptionvalue']
-#                 else:
-#                     df.loc[ix, 'facevalue'] = df.loc[ix-1, 'facevalue']
-#             if last_coupon:
-#                 df['couponprc'] = df['couponprc'].ffill()
-#             # calculating coupon values as (days from previous coupon date to current date) * (coupon rate) * (face value)
-#             df['couponvalue'] = df['couponvalue'].fillna((df['date']
-#                                                           - df['date'].shift()).dt.days / 365 * df['couponprc'] / 100 * df['facevalue'])
-#             df['couponvalue'] = round(df['couponvalue'], 2)
-#             # setting coupon and redemption values to 0 after the next offer date
-#             if till_offer:
-#                 offer_index = df.loc[(df['operationtype'] == 'offer') & (
-#                     df['date'] >= dt.datetime.now())].index
-#                 if offer_index.empty:
-#                     pass
-#                 else:
-#                     offer_index = offer_index[0]
-#                     df.loc[offer_index, 'redemptionvalue'] = df.loc[offer_index,
-#                                                                     'offerprice'] / 100 * df.loc[offer_index, 'facevalue']
-#                     df.loc[offer_index+1:, ['couponvalue', 'redemptionvalue']] = 0
-#                     df.loc[(df['operationtype'] == 'offer') & (df['date'] < dt.datetime.now()),
-#                             ['couponvalue', 'redemptionvalue']] = 0
-#             else:
-#                 df.loc[(df['operationtype'] == 'offer'), [
-#                     'couponvalue', 'redemptionvalue']] = 0
-#             df['couponvalue'] = [np.nan if pd.isnull(
-#                 x) == True else y for x, y in zip(df['couponprc'], df['couponvalue'])]
-#             df.fillna({'redemptionvalue': 0}, inplace=True)
-#             df.fillna({'offerprice': 0}, inplace=True)
-#             df.fillna({'redemptionprc': 0}, inplace=True)
-#             return df
-#         except:
-#             return pd.DataFrame()        
+    def get_bond_schedule(self, till_offer: bool = False, last_coupon: bool = False):
+        '''Returns an unprocessed schedule of payments for a bond:
+        - coupons
+        - amortization payments
+        - offers'''
+        try:
+            coupons = self.get_coupons()
+            try:
+                if pd.isnull(coupons.loc[coupons['coupondate'] > dt.datetime.now(), 'valueprc'].iloc[0]) == True:        
+                    acc_int = self._parse_market_data()['ACCRUEDINT']
+                    set_date = pd.to_datetime(self._parse_market_data()['SETTLEDATE'])
+                    c_str = coupons.loc[coupons['coupondate'] > dt.datetime.now()].iloc[0]['startdate'] 
+                    c_end = coupons.loc[coupons['coupondate'] > dt.datetime.now()].iloc[0]['coupondate'] 
+                    f_v = coupons.loc[coupons['coupondate'] > dt.datetime.now()].iloc[0]['facevalue'] 
+                    coup_rate = round(acc_int / f_v * 365 / round(((set_date - c_str).days),0),3)*100
+                    coup_sum = round((coup_rate / 100 * f_v) *  round((c_end - c_str).days ) / 365,2)
+                    coupons.loc[coupons.loc[coupons['coupondate'] > dt.datetime.now()].index[0], 'valueprc'] = coup_rate
+                    coupons.loc[coupons.loc[coupons['coupondate'] > dt.datetime.now()].index[0], 'value'] = coup_sum
+            except:
+                pass
+            offers = self.get_offers()
+            amortization = self.get_amortization()
+            # coupons processing
+            coupons.drop(columns={'issuevalue', 'primary_boardid',
+                                  'recorddate', 'startdate', 'value_rub'}, inplace=True, errors='ignore')
+            coupons.rename(columns={'coupondate': 'date',
+                                    'valueprc': 'couponprc',
+                                    'value': 'couponvalue'}, inplace=True)
+            coupons['operationtype'] = 'coupon'
+            # offers processing
+            offers = offers.loc[~offers['offertype'].str.contains('отмен')].reset_index(drop=True)
+            offers.drop(columns={'issuevalue', 'offerdatestart', 'offerdate', 'primary_boardid',
+                        'agent', 'offertype', 'value'}, inplace=True, errors='ignore')
+            offers.rename(columns={'offerdateend': 'date'}, inplace=True)
+            offers['operationtype'] = 'offer'
+            # amortization processing
+            amortization.drop(columns={
+                'issuevalue', 'primary_boardid', 'value_rub'}, inplace=True, errors='ignore')
+            amortization.rename(columns={'amortdate': 'date',
+                                         'data_source': 'operationtype',
+                                         'valueprc': 'redemptionprc',
+                                         'value': 'redemptionvalue'}, inplace=True)
+            issue_date = {'date': self.get_description(
+                param='issuedate'), 'operationtype': 'issue'}
+            # concatenate issue date / coupons / offers / amortization schedules
+            df = pd.concat([coupons, offers, amortization], ignore_index=True)
+            df.loc[len(df)] = issue_date
+            # sorting by date and operation type (coupon - last) to backfill nan coupon rates
+            mapping = {'issue': 0,
+                       'coupon': 4,
+                       'offer': 1,
+                       'amortization': 2,
+                       'maturity': 3}
+            df['order'] = df['operationtype'].map(mapping)
+            df = df.sort_values(by=['date', 'order']).reset_index(drop=True)
+            for column in ['couponprc']:
+                df[column] = df[column].bfill()
+            df['order'] = df['operationtype'].map(mapping)
+            df = df.sort_values(by=['date', 'order'])
+            df = df.drop(columns=['order']).reset_index(drop=True)
+            # final sorting by date and operation type
+            mapping = {'issue': 0,
+                       'coupon': 1,
+                       'offer': 2,
+                       'amortization': 3,
+                       'maturity': 4}
+            df['order'] = df['operationtype'].map(mapping)
+            df = df.sort_values(by=['date', 'order']).reset_index(drop=True)
+            df = df.drop(columns=['order'])
+            for column in ['isin', 'name', 'initialfacevalue', 'faceunit', 'secid']:
+                df[column] = df[column].fillna(df[column].mode()[0])
+            df.loc[0, 'facevalue'] = df.loc[0, 'initialfacevalue']
+            df.loc[0, 'couponvalue'] = 0
+            for ix in range(1, len(df)):
+                if df.loc[ix-1, 'operationtype'] == 'amortization':
+                    df.loc[ix, 'facevalue'] = df.loc[ix-1, 'facevalue'] - \
+                        df.loc[ix-1, 'redemptionvalue']
+                else:
+                    df.loc[ix, 'facevalue'] = df.loc[ix-1, 'facevalue']
+            if last_coupon:
+                df['couponprc'] = df['couponprc'].ffill()
+            # calculating coupon values as (days from previous coupon date to current date) * (coupon rate) * (face value)
+            df['couponvalue'] = df['couponvalue'].fillna((df['date']
+                                                          - df['date'].shift()).dt.days / 365 * df['couponprc'] / 100 * df['facevalue'])
+            df['couponvalue'] = round(df['couponvalue'], 2)
+            # setting coupon and redemption values to 0 after the next offer date
+            if till_offer:
+                offer_index = df.loc[(df['operationtype'] == 'offer') & (
+                    df['date'] >= dt.datetime.now())].index
+                if offer_index.empty:
+                    pass
+                else:
+                    offer_index = offer_index[0]
+                    df.loc[offer_index, 'redemptionvalue'] = df.loc[offer_index,
+                                                                    'offerprice'] / 100 * df.loc[offer_index, 'facevalue']
+                    df.loc[offer_index+1:, ['couponvalue', 'redemptionvalue']] = 0
+                    df.loc[(df['operationtype'] == 'offer') & (df['date'] < dt.datetime.now()),
+                            ['couponvalue', 'redemptionvalue']] = 0
+            else:
+                df.loc[(df['operationtype'] == 'offer'), [
+                    'couponvalue', 'redemptionvalue']] = 0
+            df['couponvalue'] = [np.nan if pd.isnull(
+                x) == True else y for x, y in zip(df['couponprc'], df['couponvalue'])]
+            df.fillna({'redemptionvalue': 0}, inplace=True)
+            df.fillna({'offerprice': 0}, inplace=True)
+            df.fillna({'redemptionprc': 0}, inplace=True)
+            return df
+        except:
+            return pd.DataFrame()        
     
 #     def find_ticker(self, type: str = None):
 #         try:
