@@ -1,8 +1,0 @@
-import src.url_reader as ur
-# from src.moex_reader import Moex
-
-
-
-# m = Moex
-
-# m('RU000A109RR3').get_coupons()

@@ -2,9 +2,9 @@ import pandas as pd
 import numpy as np
 import requests
 import datetime as dt
-import src.moex_functions as mfunc
+import moex_functions as mfunc
 
-from src.url_reader import read_url, read_url_loop, url_processed, loop_processed
+from url_reader import read_url, read_url_loop, url_processed, loop_processed
 
 urls = {'description': 'https://iss.moex.com/iss/securities/%(ticker)s',
         'securities' : 'https://iss.moex.com/iss/securities',
@@ -13,7 +13,8 @@ urls = {'description': 'https://iss.moex.com/iss/securities/%(ticker)s',
         'history_yields': 'https://iss.moex.com/iss/history/engines/%(engine)s/markets/%(market)s/boards/%(board)s/yields/%(ticker)s',
         'bondization': 'https://iss.moex.com/iss/statistics/engines/stock/markets/bonds/bondization/%(ticker)s',
         'history_dividends': 'https://iss.moex.com/iss/securities/%(ticker)s/dividends',
-        'history': 'https://iss.moex.com/iss/history/engines/%(engine)s/markets/%(market)s/boards/%(board)s/securities/%(ticker)s'}
+        'history': 'https://iss.moex.com/iss/history/engines/%(engine)s/markets/%(market)s/boards/%(board)s/securities/%(ticker)s',
+        'zcyz' : 'https://iss.moex.com/iss/engines/stock/zcyc/'}
 
 class Moex:
     session = requests.Session()
@@ -274,7 +275,7 @@ class Moex:
         if type == 'last':
             return lp
         return wap
-    
+            
     def get_ticker_currency(self):
             '''Returns currency name ticker is traded in'''
             currency = self.get_description(param = 'faceunit')
@@ -474,20 +475,21 @@ class Moex:
         except:
             return pd.DataFrame()        
     
-#     def find_ticker(self, type: str = None):
-#         try:
-#             kwargs = {
-#             'meta': 'on',
-#             'table': 'securities',
-#             'search_ticker' : self.ticker}
-#             url = 'https://iss.moex.com/iss/securities' + '.json'
-#             df = url_processed(url, **kwargs)
-#             if type in ['share', 'bond', 'index', 'future']:
-#                 return df[df['group'].str.contains(type)].loc[df['is_traded'] == 1].sort_values(by='shortname')
-#             else:
-#                 return df.loc[df['is_traded'] == 1].sort_values(by='shortname')
-#         except: 
-#             return None       
+    def find_ticker(self, type: str = None):
+        try:
+            kwargs = {
+                'iss.meta': 'on',
+                'limit': 'unlimited',
+                'table': 'securities',
+                'search_ticker' : self.ticker}
+            url = 'https://iss.moex.com/iss/securities' + '.json'
+            df = url_processed(url, **kwargs)
+            if type in ['share', 'bond', 'index', 'future']:
+                return df[df['group'].str.contains(type)].loc[df['is_traded'] == 1].sort_values(by='shortname')
+            else:
+                return df.loc[df['is_traded'] == 1].sort_values(by='shortname')
+        except: 
+            return None       
 
     @staticmethod
     def get_bonds_list():
@@ -549,31 +551,31 @@ class Moex:
 #     #     return df
 
 
-#     # @staticmethod
-#     # def get_zcurve_params(date : str = None):
-#     #         '''Parse technical parametres to calculate zero-coupon yield using Nelson-Siegel approach.'''
-#     #         if (date == None) or pd.to_datetime(date) > pd.to_datetime('today'):
-#     #                 date = pd.to_datetime('today')
-#     #         else:
-#     #                 date = pd.to_datetime(date)
-#     #         n = 0
-#     #         while True:
-#     #                 if n > 10:
-#     #                         break
-#     #                 try:
-#     #                         data = read_url(urls['zcyz'], date=date.date())
-#     #                         min_date = pd.to_datetime(data['params.dates']['data'][0][0])
-#     #                         if date < min_date:
-#     #                             print('error, min date: ', min_date.date())
-#     #                             return None
-#     #                         data = data['params']
-#     #                         zcyz_params = pd.Series(data['data'][0], index=data['columns'])
-#     #                         zcyz_params.index = zcyz_params.index.str.lower()
-#     #                         zcyz_params = zcyz_params.rename({'b1': 'b0', 'b2': 'b1', 'b3': 'b2'})
-#     #                         return zcyz_params
-#     #                 except:
-#     #                         date -= dt.timedelta(days=1)
-#     #                         n += 1
+    @staticmethod
+    def get_zcurve_params(date : str = None):
+            '''Parse technical parametres to calculate zero-coupon yield using Nelson-Siegel approach.'''
+            if (date == None) or pd.to_datetime(date) > pd.to_datetime('today'):
+                    date = pd.to_datetime('today')
+            else:
+                    date = pd.to_datetime(date)
+            n = 0
+            while True:
+                    if n > 10:
+                            break
+                    try:
+                            data = read_url(urls['zcyz'] + '.json', date=date.date()).json()
+                            min_date = pd.to_datetime(data['params.dates']['data'][0][0])
+                            if date < min_date:
+                                print('error, min date: ', min_date.date())
+                                return None
+                            data = data['params']
+                            zcyz_params = pd.Series(data['data'][0], index=data['columns'])
+                            zcyz_params.index = zcyz_params.index.str.lower()
+                            zcyz_params = zcyz_params.rename({'b1': 'b0', 'b2': 'b1', 'b3': 'b2'})
+                            return zcyz_params
+                    except:
+                            date -= dt.timedelta(days=1)
+                            n += 1
 
 #     # @staticmethod
 #     # def calculate_zyield(p, t):
@@ -667,28 +669,28 @@ class Moex:
 #     #         plt.savefig(save_to_file)
 #     #         return plt.show()
         
-#     # def get_candles(self,
-#     #                 start : Optional[str] = None,
-#     #                 end : Optional[str] = None,
-#     #                 interval : int = 24):
-#     #     if start:
-#     #          start = pd.to_datetime(start).date()
-#     #     else: 
-#     #          start = (pd.to_datetime('today') - pd.Timedelta(days=30)).date()
-#     #     if end:
-#     #          end = pd.to_datetime(end).date()
-#     #     else:
-#     #          end = pd.to_datetime('today').date()
-#     #     data = read_url(urls['candles'], add_text = '/candles',
-#     #                     ticker = self.ticker, 
-#     #                     market=self._market,
-#     #                     engine=self._engine,
-#     #                     board=self._primary_board,
-#     #                     from_date=start,
-#     #                     till_date=end,
-#     #                     interval=interval,
-#     #                     table='candles')
-#     #     df = pd.DataFrame(data['data'], columns=data['columns'])
-#     #     df = F.make_new_types(df, data['metadata'])
-#     #     return df
+    # def get_candles(self,
+    #                 start : Optional[str] = None,
+    #                 end : Optional[str] = None,
+    #                 interval : int = 24):
+    #     if start:
+    #          start = pd.to_datetime(start).date()
+    #     else: 
+    #          start = (pd.to_datetime('today') - pd.Timedelta(days=30)).date()
+    #     if end:
+    #          end = pd.to_datetime(end).date()
+    #     else:
+    #          end = pd.to_datetime('today').date()
+    #     data = read_url(urls['candles'], add_text = '/candles',
+    #                     ticker = self.ticker, 
+    #                     market=self._market,
+    #                     engine=self._engine,
+    #                     board=self._primary_board,
+    #                     from_date=start,
+    #                     till_date=end,
+    #                     interval=interval,
+    #                     table='candles')
+    #     df = pd.DataFrame(data['data'], columns=data['columns'])
+    #     df = F.make_new_types(df, data['metadata'])
+    #     return df
          

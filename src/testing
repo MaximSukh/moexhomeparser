@@ -1,0 +1,7 @@
+
+import url_reader as ur
+from moex_reader import Moex
+
+
+m = Moex
+m('SBER').get_price()
