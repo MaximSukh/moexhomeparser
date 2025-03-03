@@ -2,6 +2,9 @@ import pandas as pd
 import numpy as np
 import requests
 import datetime as dt
+from zipfile import ZipFile
+from io import BytesIO
+
 import moex_functions as mfunc
 
 from url_reader import read_url, read_url_loop, url_processed, loop_processed
@@ -14,7 +17,10 @@ urls = {'description': 'https://iss.moex.com/iss/securities/%(ticker)s',
         'bondization': 'https://iss.moex.com/iss/statistics/engines/stock/markets/bonds/bondization/%(ticker)s',
         'history_dividends': 'https://iss.moex.com/iss/securities/%(ticker)s/dividends',
         'history': 'https://iss.moex.com/iss/history/engines/%(engine)s/markets/%(market)s/boards/%(board)s/securities/%(ticker)s',
-        'zcyz' : 'https://iss.moex.com/iss/engines/stock/zcyc/'}
+        'zcyz' : 'https://iss.moex.com/iss/engines/stock/zcyc/',
+        'candles' : 'http://iss.moex.com/iss/engines/%(engine)s/markets/%(market)s/boards/%(board)s/securities/%(ticker)s/candles',
+        'indices': 'https://iss.moex.com/iss/statistics/engines/stock/markets/index/analytics/%(ticker)s',
+        'indices_collections': 'https://iss.moex.com/iss/securitygroups/stock_index/collections/%(ticker)s'}
 
 class Moex:
     session = requests.Session()
@@ -518,179 +524,132 @@ class Moex:
         b_list = b_list.loc[b_list.BOARDID.isin(boards)]
         return b_list
     
-
-
-#     # @staticmethod
-#     # def get_indices_groups(name: Optional[str] = None):
-#     #     """
-#     #     Returns a list of indice groups (e.g., "stock_index_bonds").
-#     #     Args:
-#     #     - name (str, optional): Name of indice group to return a detailed list of indices in a group. \n
-#     #     Example:
-#     #     Moex.get_indices_groups(name='stock_index_bonds_corporate')
-#     #     """
-#     #     if name:
-#     #         data = read_url(
-#     #             url=urls['indices_collections'] + name + '/securities', table='securities')
-#     #         df = pd.DataFrame(data['data'], columns=data['columns'])
-#     #         df = F.make_new_types(df, data['metadata'])
-#     #         return df
-#     #     data = read_url(url=urls['indices_collections'], table='collections')
-#     #     df = pd.DataFrame(data['data'], columns=data['columns'])
-#     #     df = F.make_new_types(df, data['metadata'])
-#     #     return df
-
-#     # @staticmethod
-#     # def get_indice_tickers(ticker):
-#     #     '''Returns a list of tickers in an indice and weights.'''
-#     #     kwargs = {'ticker': ticker,
-#     #               'table': 'analytics',
-#     #               'limit': ''}
-#     #     data, meta = read_url_loop(urls['indices'], kwargs)
-#     #     df = F.make_new_types(data, meta)
-#     #     return df
-
+    def get_candles(self,
+                    date_from: str = None,
+                    date_to: str = None,
+                    interval : int = 24):
+        date_from = (dt.datetime.now() - dt.timedelta(days=30)).date() if date_from == None else date_from
+        date_to = dt.datetime.now().date() if date_to == None else date_to
+        table = 'candles'
+        kwargs = {
+        'ticker': self.ticker,
+        'iss.meta': 'on',
+        'limit': 'unlimited',    
+        'engine' : self.get_engine(),
+        'market' : self.get_market(),
+        'board' : self.get_board(),
+        'date_from': date_from,
+        'date_to': date_to,
+        'table': table,
+        'interval' : interval}
+        url = urls[table] + '.json'
+        df = url_processed(url, **kwargs)
+        return df
 
     @staticmethod
-    def get_zcurve_params(date : str = None):
-            '''Parse technical parametres to calculate zero-coupon yield using Nelson-Siegel approach.'''
-            if (date == None) or pd.to_datetime(date) > pd.to_datetime('today'):
-                    date = pd.to_datetime('today')
-            else:
-                    date = pd.to_datetime(date)
-            n = 0
-            while True:
-                    if n > 10:
-                            break
-                    try:
-                            data = read_url(urls['zcyz'] + '.json', date=date.date()).json()
-                            min_date = pd.to_datetime(data['params.dates']['data'][0][0])
-                            if date < min_date:
-                                print('error, min date: ', min_date.date())
-                                return None
-                            data = data['params']
-                            zcyz_params = pd.Series(data['data'][0], index=data['columns'])
-                            zcyz_params.index = zcyz_params.index.str.lower()
-                            zcyz_params = zcyz_params.rename({'b1': 'b0', 'b2': 'b1', 'b3': 'b2'})
-                            return zcyz_params
-                    except:
-                            date -= dt.timedelta(days=1)
-                            n += 1
+    def get_indices_groups(name: str = None):
+        """
+        Returns a list of indice groups (e.g., "stock_index_bonds").
+        Args:
+        - name (str, optional): Name of indice group to return a detailed list of indices in a group. \n
+        Example:
+        Moex.get_indices_groups(name='stock_index_bonds_corporate')
+        """
+        if name:
+            kwargs = {
+            'ticker': name,
+            'iss.meta': 'on',
+            'limit': 'unlimited',    
+            'table': 'securities'}
+            data = url_processed(
+                url=urls['indices_collections'] + '/securities' + '.json', **kwargs)
+            return data
+        kwargs = {
+        'ticker': '',
+        'iss.meta': 'on',
+        'limit': 'unlimited',    
+        'table': 'collections'}
+        data = url_processed(url=urls['indices_collections'] + '.json', **kwargs)
+        return data
 
-#     # @staticmethod
-#     # def calculate_zyield(p, t):
-#     #         def func_a(k):
-#     #                 s = [0, 0.6]
-#     #                 for i in range(2,9):
-#     #                         next = s[-1] + s[1]*k**(i-1)
-#     #                         s.append(next)
-#     #                 return s
-#     #         k = 1.6
-#     #         a = func_a(k)
-#     #         b = [0.6*k**i for i in range(0,9)]
-#     #         g = p.iloc[-9:]
-#     #         dl = sum([g[i] * np.exp( -(t - a[i])**2 / b[i]**2 ) for i in range(0,9)])
-#     #         dr = p.b0 + (p.b1 + p.b2) * (p.t1 / t) * (1- np.exp(-t/p.t1)) - p.b2 * np.exp(-t/p.t1)
-#     #         g_t = dl + dr
-#     #         y_t = 10000 * (np.exp(g_t/10000) -1)
-#     #         d_t = 1 / (1+ y_t/10000)**t
-#     #         return y_t / 100
+    @staticmethod
+    def get_indice_tickers(ticker):
+        '''Returns a list of tickers in an indice and weights.'''
+        kwargs = {
+        'ticker': ticker,
+        'iss.meta': 'on',
+        'limit': 'unlimited',    
+        'table': 'analytics'}
+        df = url_processed(urls['indices'] + '.json', **kwargs)
+        return df
 
-#     # def get_zyield_for_maturity(t : float, date : str = None):
-#     #     p = Moex.get_zcurve_params(date=date)
-#     #     return Moex.calculate_zyield(p, t)
+    @staticmethod
+    def get_zcurve_params(date = None):
+        df = read_url(urls['zcyz'] + '.json', date=date).json()
+        min_date = pd.to_datetime(df['params.dates']['data'][0][0]) 
+        if date == None:
+            date = pd.to_datetime('today').normalize()
+        if pd.to_datetime(date) < min_date:
+            print('error, min date: ', min_date.date())
+            return None  
+        df = df['params']
+        zcyz_params = pd.DataFrame(df['data'], columns=df['columns'])
+        zcyz_params.columns = zcyz_params.columns.str.lower()
+        zcyz_params = zcyz_params.rename(columns={'b1': 'b0', 'b2': 'b1', 'b3': 'b2'})
+        return zcyz_params
 
-#     # def plot_zyield(date : str = None, save_to_file : str = None):  
-#     #     if (date == None) or pd.to_datetime(date) > pd.to_datetime('today'):
-#     #             date = pd.to_datetime('today')
-#     #             w1 = date - dt.timedelta(weeks=1)
-#     #             w4 = date - dt.timedelta(weeks=4)
-#     #     else:
-#     #             date = pd.to_datetime(date)
-#     #             w1 = pd.to_datetime(date) - dt.timedelta(weeks=1)
-#     #             w4 = pd.to_datetime(date) - dt.timedelta(weeks=4)
-#     #     p = Moex.get_zcurve_params(date=date)
-#     #     pw1 = Moex.get_zcurve_params(date=w1.date())
-#     #     pw4 = Moex.get_zcurve_params(date=w4.date())
-        
-#     #     x = np.linspace(0.01, 20, 100)
-#     #     y = Moex.calculate_zyield(p, x)
-#     #     xw1 = np.linspace(0.01, 20, 100)
-#     #     yw1 = Moex.calculate_zyield(pw1, x)
-#     #     xw4 = np.linspace(0.01, 20, 100)
-#     #     yw4 = Moex.calculate_zyield(pw4, x)
+    @staticmethod
+    def get_zcurve_params_history():
+        url = "http://moex.com/iss/downloads/engines/stock/zcyc/dynamic.csv.zip"
+        response = read_url(url)
+        with ZipFile(BytesIO(response.content)) as zip_file:
+            with zip_file.open(zip_file.namelist()[0]) as file:
+                df = pd.read_csv(file, sep=';', decimal=',', skiprows=1)
+                df.columns = df.columns.str.lower()
+                df = df.rename(columns={'b1': 'b0', 'b2': 'b1', 'b3': 'b2'})
+                df['tradedate'] = pd.to_datetime(df['tradedate'], format='%d.%m.%Y')
+        return df
 
-#     #     dates_list = [pd.to_datetime('today').normalize().date() - pd.Timedelta(weeks=x) for x in range(8)]
-#     #     p_list = [Moex.get_zcurve_params(x) for x in dates_list]
-#     #     y10 = [Moex.calculate_zyield(x, 10) for x in p_list]
-#     #     y3 = [Moex.calculate_zyield(x, 3) for x in p_list]
-#     #     y1 = [Moex.calculate_zyield(x, 1) for x in p_list]
-#     #     y3_delta = [x - y for x,y in zip(y10,y3)]
-#     #     y1_delta = [x - y for x,y in zip(y10,y1)]
+    @staticmethod
+    def get_zcurve_prices(date = None):
+        df = read_url(urls['zcyz'] + '.json', date=date).json()
+        min_date = pd.to_datetime(df['params.dates']['data'][0][0]) 
+        if date == None:
+            date = pd.to_datetime('today')   
+        if pd.to_datetime(date) < min_date:
+            print('error, min date: ', min_date.date())
+            return None  
+        df = df['yearyields']
+        df = pd.DataFrame(df['data'], columns=df['columns'])
+        df.columns = df.columns.str.lower()
+        df['tradedate'] = pd.to_datetime(df['tradedate'])
+        return df
 
-#     #     plt.rcParams["figure.figsize"] = [20, 6]
-#     #     fig, (ax1, ax2) = plt.subplots(1, 2)
-#     #     ax1.plot(x, y, color='blue', label=date.date())
-#     #     ax1.plot(xw1, yw1, '--', color='grey', label='1 week')
-#     #     ax1.plot(xw4, yw4, '--', color='darkgrey', label='4 weeks')
-#     #     ax1.plot(np.linspace(1, 20, 21), Moex.calculate_zyield(p, np.linspace(1, 20, 21)), '*', color='blue')
-#     #     ax1.set_xticks(np.linspace(0, 20, 21))
-        
-#     #     ax1.set_title(f'MOEX GCURVE, {date.date()}', loc = "left", fontsize = 10)
-#     #     ax1.set_facecolor('w')
-#     #     ax1.grid(True, linestyle = "dashed")
-#     #     ax1.legend(loc='lower right', frameon=True)
-#     #     ax1.set_xlabel("Maturity")
-#     #     ax1.set_ylabel("Yield")
+    @staticmethod
+    def calculate_zyield(p, t):
+        def func_a(k):
+            s = [0, 0.6]
+            for i in range(2,9):
+                next = s[-1] + s[1]*k**(i-1)
+                s.append(next)
+            return s
+        k = 1.6
+        a = func_a(k)
+        b = [0.6*k**i for i in range(0,9)]
+        g = p.iloc[-9:]
+        dl = sum([g.iloc[i] * np.exp( -(t - a[i])**2 / b[i]**2 ) for i in range(0,9)])
+        dr = p.b0 + (p.b1 + p.b2) * (p.t1 / t) * (1- np.exp(-t/p.t1)) - p.b2 * np.exp(-t/p.t1)
+        g_t = dl + dr
+        y_t = 10000 * (np.exp(g_t/10000) -1)
+        d_t = 1 / (1+ y_t/10000)**t
+        return y_t / 100
 
-#     #     ax2.plot(dates_list, y3_delta, color='c', label='10y-3y delta')
-#     #     ax2.plot(dates_list, y1_delta, color='grey', label='10y-1y delta')
-#     #     ax2.set_xticks(dates_list)  
-#     #     ax2.set_title(f'Yield delta', loc = "left", fontsize = 10)
-#     #     ax2.set_facecolor('w')
-#     #     ax2.grid(True, linestyle = "dashed")
-#     #     ax2.legend(loc='upper right', frameon=True)
-#     #     ax2.set_xlabel("Date")
-#     #     ax2.set_ylabel("Delta_Yield")
-        
-#     #     for x,y in zip(np.linspace(1, 20, 21), Moex.calculate_zyield(p, np.linspace(1, 20, 21))):
-#     #             label = "{:.2f}".format(y)
-
-#     #             ax1.annotate(label, # this is the text
-#     #                                     (x,y), # these are the coordinates to position the label
-#     #                                     textcoords="offset points", # how to position the text
-#     #                                     xytext=(-2,5), # distance from text to points (x,y)
-#     #                                     fontsize = 8,
-#     #                                     ha='right')      
-#     #     fig.tight_layout()
-#     #     if save_to_file ==None:
-#     #         return plt.show()
-#     #     else:
-#     #         plt.savefig(save_to_file)
-#     #         return plt.show()
-        
-    # def get_candles(self,
-    #                 start : Optional[str] = None,
-    #                 end : Optional[str] = None,
-    #                 interval : int = 24):
-    #     if start:
-    #          start = pd.to_datetime(start).date()
-    #     else: 
-    #          start = (pd.to_datetime('today') - pd.Timedelta(days=30)).date()
-    #     if end:
-    #          end = pd.to_datetime(end).date()
-    #     else:
-    #          end = pd.to_datetime('today').date()
-    #     data = read_url(urls['candles'], add_text = '/candles',
-    #                     ticker = self.ticker, 
-    #                     market=self._market,
-    #                     engine=self._engine,
-    #                     board=self._primary_board,
-    #                     from_date=start,
-    #                     till_date=end,
-    #                     interval=interval,
-    #                     table='candles')
-    #     df = pd.DataFrame(data['data'], columns=data['columns'])
-    #     df = F.make_new_types(df, data['metadata'])
-    #     return df
-         
+    @staticmethod
+    def get_zyield_for_maturity(t : float, date : str = None):
+        p = Moex.get_zcurve_params(date=date)
+        if p.empty:
+            print('No data for {date}'.format(date=date))
+            return None
+        p = pd.Series(p.iloc[0], index=p.columns)
+        return Moex.calculate_zyield(p, t)
+            
