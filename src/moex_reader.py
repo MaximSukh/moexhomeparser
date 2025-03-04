@@ -413,6 +413,8 @@ class Moex:
                                          'data_source': 'operationtype',
                                          'valueprc': 'redemptionprc',
                                          'value': 'redemptionvalue'}, inplace=True)
+            if amortization.loc[amortization.index[-1], 'operationtype'] == 'amortization':
+                amortization.loc[amortization.index[-1], 'operationtype'] = 'maturity' 
             issue_date = {'date': self.get_description(
                 param='issuedate'), 'operationtype': 'issue'}
             # concatenate issue date / coupons / offers / amortization schedules
