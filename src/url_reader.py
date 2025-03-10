@@ -16,7 +16,7 @@ def read_url(url: str,
             start: int = None,
             search_ticker : str = None,   
             **kwargs):
-  params = {'iss.meta': meta,
+    params = {'iss.meta': meta,
             'iss.only': table,
             'limit': limit,
             'date': date,
@@ -25,19 +25,19 @@ def read_url(url: str,
             'interval': interval,
             'start': start,
             'q' : search_ticker}
-  headers = {
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:66.0) Gecko/20100101 Firefox/66.0",
-      "Accept-Encoding": "*",
-      "Connection": "keep-alive"}
-  url = url % kwargs
-  response = session.get(url,
-                      headers=headers,
-                      params=params,
-                      verify=certifi.where(),
-                      json=True)
-  if print_url:
-    return print(response.url)
-  return response
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:66.0) Gecko/20100101 Firefox/66.0",
+        "Accept-Encoding": "*",
+        "Connection": "keep-alive"}
+    url = url % kwargs
+    response = session.get(url,
+                        headers=headers,
+                        params=params,
+                        verify=certifi.where(),
+                        json=True)
+    if print_url:
+        return print(response.url)
+    return response
 
 def read_url_loop(url, table : str, **kwargs):
     iter = 0

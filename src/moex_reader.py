@@ -136,11 +136,6 @@ class Moex:
     def _parse_market_data(self):
         """
         Parses market data for a given ticker.
-
-        This method constructs a URL with the necessary query parameters and sends a request to retrieve market data in JSON format.
-        It processes the response to extract relevant information from the 'securities', 'marketdata_yields', and 'marketdata' sections.
-        The extracted data is combined into a single table, ensuring no duplicate indices.
-
         Returns:
             pd.Series: A pandas Series containing the combined market data.
             If no data is available or an error occurs, an empty list is returned.
@@ -178,7 +173,6 @@ class Moex:
                                        Defaults to 30 days before the current date if not provided.
             date_to (str, optional): The end date for the data retrieval in 'YYYY-MM-DD' format. 
                                      Defaults to the current date if not provided.
-
         Returns:
             pd.DataFrame: A DataFrame containing the historical yield data with appropriate columns and data types.
         """
@@ -205,6 +199,17 @@ class Moex:
         return df
     
     def _parse_history_results(self, date_from: str = None, date_to: str = None):
+        """
+        Parses historical trading data for a given ticker within a specified date range.
+
+        Args:
+            date_from (str, optional): The start date for the data retrieval in 'YYYY-MM-DD' format. 
+                                       Defaults to 30 days before the current date if not provided.
+            date_to (str, optional): The end date for the data retrieval in 'YYYY-MM-DD' format. 
+                                     Defaults to the current date if not provided.
+        Returns:
+            pd.DataFrame: A DataFrame containing the historical yield data with appropriate columns and data types.
+        """
         date_from = (dt.datetime.now() - dt.timedelta(days=30)).date() if date_from == None else date_from
         date_to = dt.datetime.now().date() if date_to == None else date_to
         table = 'history'
@@ -253,12 +258,15 @@ class Moex:
             return pd.NaT
 
     def get_price(self, date: str = None, type :str = 'last'):
-        '''Returns a last clean price for a ticker
+        """
+        Returns a last clean price for a ticker.
         If today is a trading day, it returns the latest transaction price or the last known transaction price if there have been no transactions.
         If today is not a trading day, it returns the last known price from the previous day.
+        
         Parameters:
-        - date (str or None): A string representing the date or None. If provided, it considers the specified date; otherwise, it uses the current date.
-        - type (last or wap): The type of price to be considered. Options include the transaction price and the weighted average price. Default: last.'''
+            date (str or None): A string representing the date or None. If provided, it considers the specified date; otherwise, it uses the current date.
+            type (last or wap): The type of price to be considered. Options include the transaction price and the weighted average price. Default: last.
+        """
         if date == None or pd.to_datetime(date).date() == dt.datetime.now().date():
             data = self._parse_market_data()
         else:
@@ -283,13 +291,13 @@ class Moex:
         return wap
             
     def get_ticker_currency(self):
-            '''Returns currency name ticker is traded in'''
-            currency = self.get_description(param = 'faceunit')
-            if currency:
-                currency = currency.replace('SUR' , 'RUB')
-                return currency
-            else:
-                return None
+        '''Returns currency name ticker is traded in'''
+        currency = self.get_description(param = 'faceunit')
+        if currency:
+            currency = currency.replace('SUR' , 'RUB')
+            return currency
+        else:
+            return None
     
     def get_dividends(self):
         '''Returns a list of known dividends for a ticker'''
@@ -484,6 +492,16 @@ class Moex:
             return pd.DataFrame()        
     
     def find_ticker(self, type: str = None):
+        """
+        Finds and returns ticker information from the MOEX ISS API.
+        Args:
+            type (str, optional): The type of security to filter by. 
+                                  Can be 'share', 'bond', 'index', or 'future'. 
+                                  Defaults to None.
+        Returns:
+            DataFrame: A pandas DataFrame containing the filtered ticker information 
+                       sorted by 'shortname'. Returns None if an error occurs.
+        """
         try:
             kwargs = {
                 'iss.meta': 'on',
@@ -530,6 +548,19 @@ class Moex:
                     date_from: str = None,
                     date_to: str = None,
                     interval : int = 24):
+        """
+        Retrieves candle data for a given ticker within a specified date range and interval.
+
+        Args:
+            date_from (str, optional): The start date for the data retrieval in 'YYYY-MM-DD' format. 
+                                       Defaults to 30 days before the current date if not provided.
+            date_to (str, optional): The end date for the data retrieval in 'YYYY-MM-DD' format. 
+                                     Defaults to the current date if not provided.
+            interval (int, optional): The interval for the candle data. Default is 24.
+
+        Returns:
+            pd.DataFrame: A DataFrame containing the candle data.
+        """
         date_from = (dt.datetime.now() - dt.timedelta(days=30)).date() if date_from == None else date_from
         date_to = dt.datetime.now().date() if date_to == None else date_to
         table = 'candles'
@@ -602,6 +633,11 @@ class Moex:
 
     @staticmethod
     def get_zcurve_params_history():
+        """
+        Fetches and processes the zero-coupon yield curve parameters history from the Moscow Exchange.
+        Returns:
+            pd.DataFrame: A DataFrame containing the processed zero-coupon yield curve parameters history.
+        """
         url = "http://moex.com/iss/downloads/engines/stock/zcyc/dynamic.csv.zip"
         response = read_url(url)
         with ZipFile(BytesIO(response.content)) as zip_file:
@@ -614,6 +650,16 @@ class Moex:
 
     @staticmethod
     def get_zcurve_prices(date = None):
+        """
+        Fetches and returns zero-coupon yield curve prices for a given date.
+
+        Parameters:
+            date (str or None): The date for which to fetch the yield curve prices. 
+                                If None, the current date is used. The date should be in a format 
+                                recognized by pandas.to_datetime.
+        Returns:
+                DataFrame or None: A DataFrame containing the zero-coupon yield curve prices or None if an error occurs.
+        """
         df = read_url(urls['zcyz'] + '.json', date=date).json()
         min_date = pd.to_datetime(df['params.dates']['data'][0][0]) 
         if date == None:
@@ -629,6 +675,16 @@ class Moex:
 
     @staticmethod
     def calculate_zyield(p, t):
+        """
+        Calculate the yield based on given parameters.
+
+        Parameters:
+            p (DataFrame): A pandas DataFrame containing the necessary financial data.
+            t (float): A time parameter used in the calculation.
+
+        Returns:
+            float: The calculated yield.
+        """
         def func_a(k):
             s = [0, 0.6]
             for i in range(2,9):
@@ -647,11 +703,20 @@ class Moex:
         return y_t / 100
 
     @staticmethod
-    def get_zyield_for_maturity(t : float, date : str = None):
+    def get_zyield_for_maturity(t: float, date: str = None):
+        """
+        Calculates the zero-coupon yield for a given maturity.
+
+        Args:
+            t (float): The maturity in years.
+            date (str, optional): The date for which to calculate the yield. Defaults to None.
+
+        Returns:
+            float: The calculated zero-coupon yield.
+        """
         p = Moex.get_zcurve_params(date=date)
-        if p.empty:
-            print('No data for {date}'.format(date=date))
+        if p is None or p.empty:
+            print(f'No data for {date}')
             return None
         p = pd.Series(p.iloc[0], index=p.columns)
         return Moex.calculate_zyield(p, t)
-            
