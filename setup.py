@@ -5,7 +5,7 @@ setup(
     version='0.1.0',
     description='A module for parsing MOEX financial data',
     author='Sukhanov_Maxim',
-    author_email='mssukukhanov@gmail.com',
+    author_email='mssukhanov@gmail.com',
     packages=find_packages(where='src'),
     package_dir={'': 'src'},
     install_requires=[
